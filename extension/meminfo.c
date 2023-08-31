@@ -331,9 +331,13 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
         *first_element = 0;
     }
 
+    zend_string *zv_type = meminfo_escape_for_json(Z_ISUNDEF_P(zv) ? "null" : zend_get_type_by_const(Z_TYPE_P(zv)));
+
     php_stream_printf(stream, "    \"%s\" : {\n", zval_identifier);
-    php_stream_printf(stream, "        \"type\" : \"%s\",\n", zend_get_type_by_const(Z_TYPE_P(zv)));
+    php_stream_printf(stream, "        \"type\" : \"%s\",\n", ZSTR_VAL(zv_type));
     php_stream_printf(stream, "        \"size\" : \"%ld\",\n", meminfo_get_element_size(zv));
+
+    zend_string_release(zv_type);
 
     if (frame_label) {
         zend_string * escaped_frame_label;
@@ -355,7 +359,7 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 
         zend_string_release(escaped_frame_label);
     } else {
-        php_stream_printf(stream, "        \"is_root\" : false\n");
+        php_stream_printf(stream, "        \"is_root\" : false");
     }
 
     if (Z_TYPE_P(zv) == IS_OBJECT) {
@@ -396,7 +400,35 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
         php_stream_printf(stream, ",\n");
         meminfo_hash_dump(stream, Z_ARRVAL_P(zv), 0, visited_items, first_element);
     } else {
-        php_stream_printf(stream, "\n");
+        switch (Z_TYPE_P(zv)) {
+            case IS_STRING:
+                php_stream_printf(stream, ",\n        \"value\" : \"%s\"\n", ZSTR_VAL(meminfo_escape_for_json(zv->value.str->val)));
+                break;
+
+            case IS_LONG:
+                php_stream_printf(stream, ",\n        \"value\" : \"%ld\"\n", zv->value.lval);
+                break;
+
+            case IS_DOUBLE:
+                php_stream_printf(stream, ",\n        \"value\" : \"%f\"\n", zv->value.dval);
+                break;
+
+            case IS_NULL:
+                php_stream_printf(stream, ",\n        \"value\" : null\n");
+                break;
+
+            case IS_TRUE:
+                php_stream_printf(stream, ",\n        \"value\" : true\n");
+                break;
+
+            case IS_FALSE:
+                php_stream_printf(stream, ",\n        \"value\" : false\n");
+                break;
+
+            default:
+                php_stream_printf(stream, "\n");
+                break;
+        }
     }
 }
 
